@@ -1,14 +1,29 @@
 import os
-import time
+import io
+import re
+from typing import Literal
+from PyPDF2 import PdfReader
 from datetime import datetime
 from aiogram.types import Message
-from typing import Literal
 
 from src.logger import logger
 from src.config import config
 
 
 # __________ COMMON __________
+
+def sanitize_filename(filename: str) -> str:
+    try:
+        # Заменяем все недопустимые символы на пробелы
+        sanitized = re.sub(r'[\<\>\/\"\\\|\?\*]', ' ', filename)
+        # Убираем повторяющиеся пробелы
+        sanitized = re.sub(r'\s+', ' ', sanitized)
+        # Убираем пробелы в начале и конце строки
+        sanitized = sanitized.strip()
+        return sanitized
+    except Exception:
+        return filename
+
 
 def get_unique_filename(filepath):
     if not os.path.exists(filepath):
@@ -47,3 +62,17 @@ def showlog_message_info(message: Message, message_type: Literal['file'] | Liter
         logger.clear()
     except Exception as e:
         print('showlog_message_info error:', e)
+
+
+def is_pdf_valid(pdf_data: str | bytes) -> bool:
+    """
+    Проверяет, открывается ли PDF.
+    pdf_data: путь к файлу или байты
+    """
+    try:
+        reader = PdfReader(pdf_data) if isinstance(pdf_data, str) else PdfReader(io.BytesIO(pdf_data))
+        # Попробуем получить хотя бы одну страницу
+        _ = reader.pages[0]
+        return True
+    except Exception:
+        return False

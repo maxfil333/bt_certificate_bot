@@ -1,4 +1,5 @@
 import os
+import io
 import traceback
 
 from aiogram import Bot  # бот
@@ -10,7 +11,7 @@ from aiogram.types import Message, ContentType  # объект Message, ContentT
 from src.config import config
 from src.logger import logger
 from src.filters import IsAuthorizedUser
-from src.utils import get_unique_filename, showlog_message_info
+from src.utils import sanitize_filename, get_unique_filename, showlog_message_info, is_pdf_valid
 from src.sql_queries import is_in_codes, add_user, delete_verified_guid, is_in_users
 
 
@@ -76,23 +77,32 @@ async def document_loader(message: Message, bot: Bot):
     doc = message.document
     file_name, file_id = doc.file_name, doc.file_id
     file_name_base, file_name_ext = os.path.splitext(file_name)
-    file_name_with_message_id = file_name_base + '_' + str(message.message_id) + file_name_ext
+    file_name_with_message_id = sanitize_filename(file_name_base + '_' + str(message.message_id) + file_name_ext)
     try:
         destination = get_unique_filename(os.path.join(config['save_dir'], file_name_with_message_id))
-        await bot.download(file_id, destination)
+        file = await bot.get_file(file_id)
+        buf = io.BytesIO()
+        await bot.download(file, buf)
+        data = buf.getvalue()
+        if file_name_ext.lower() == '.pdf':
+            if not is_pdf_valid(data):
+                raise ValueError("PDF поврежден или не открывается.")
+        with open(destination, "wb") as f:
+            f.write(data)
+            logger.print(f"{destination=}")
     except Exception as error:
-        await message.answer(f"Файл \"{file_name}\" не получен.")
+        await message.answer(f"ОШИБКА! Файл \"{file_name}\" не получен.", parse_mode=None)
         logger.print(f'Ошибка после получения документа: {error}')
         logger.save(config['log_folder'])
         logger.clear()
     else:
-        await message.answer(f"Файл \"{file_name}\" успешно получен.")
+        await message.answer(f"Файл \"{file_name}\" успешно получен.", parse_mode=None)
 
 
 @router.message(F.document)
 async def document_loader(message: Message):
     file_name = message.document.file_name
-    await message.answer(f"Файл \"{file_name}\" не получен.\nНеподдерживаемый тип файла.")
+    await message.answer(f"ОШИБКА! Файл \"{file_name}\" не получен.\nНеподдерживаемый тип файла.", parse_mode=None)
 
 
 @router.message(F.photo)
