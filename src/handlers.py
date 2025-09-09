@@ -89,7 +89,9 @@ async def document_loader(message: Message, bot: Bot):
                 raise ValueError("PDF поврежден или не открывается.")
         with open(destination, "wb") as f:
             f.write(data)
-            logger.print(f"{destination=}")
+        logger.print(f"{destination=}")
+        logger.save(config['log_folder'])
+        logger.clear()
     except Exception as error:
         await message.answer(f"ОШИБКА! Файл \"{file_name}\" не получен.", parse_mode=None)
         logger.print(f'Ошибка после получения документа: {error}')
